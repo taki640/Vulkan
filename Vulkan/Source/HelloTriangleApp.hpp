@@ -9,9 +9,13 @@
 
 struct QueueFamilyIndices
 {
-	std::optional<uint32_t> GraphicsFamily = 0;
+	std::optional<uint32_t> GraphicsFamily;
+	std::optional<uint32_t> PresentFamily;
 
-	bool IsComplete() const { return GraphicsFamily.has_value(); }
+	bool IsComplete() const
+	{
+		return GraphicsFamily.has_value() && PresentFamily.has_value();
+	}
 };
 
 class HelloTriangleApp
@@ -34,8 +38,10 @@ private:
 	VkInstance m_VkInstance;
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;	// Implicitly destroyed when the VkInstance is destroyed
-	VkDevice m_VkDevice;
+	VkDevice m_Device;
 	VkQueue m_GraphicsQueue;
+	VkSurfaceKHR m_Surface;
+	VkQueue m_PresentQueue;
 
 	void InitWindow();
 	void InitVulkan();
@@ -52,6 +58,9 @@ private:
 	void SetupDebugMessenger();
 	VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
 	void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator);
+
+	// Create Vulkan surface
+	void CreateSurface();
 
 	// Picking a suitable physical device
 	void PickPhysicalDevice();

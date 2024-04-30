@@ -1,5 +1,7 @@
 #include "HelloTriangleApp.hpp"
 
+#include <set>
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -57,9 +59,11 @@ void HelloTriangleApp::MainLoop()
 
 void HelloTriangleApp::CleanupVulkan()
 {
-	vkDestroyDevice(m_VkDevice, nullptr);
+	vkDestroyDevice(m_Device, nullptr);
 	if (VALIDATION_LAYERS_ENABLED)
 		DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugMessenger, nullptr);
+
+	vkDestroySurfaceKHR(m_VkInstance, m_Surface, nullptr);
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/01_Instance.html#_cleaning_up
 	vkDestroyInstance(m_VkInstance, nullptr);
 }
@@ -152,6 +156,7 @@ std::vector<const char*> HelloTriangleApp::GetRequiredExtensions()
 {
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/02_Validation_layers.html#_message_callback
 	uint32_t glfwExtensionCount = 0;
+	// Has VK_KHR_surface and VK_KHR_win32_surface
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
@@ -189,6 +194,13 @@ void HelloTriangleApp::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebu
 	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
 	if (func != nullptr)
 		func(instance, debugMessenger, pAllocator);
+}
+
+void HelloTriangleApp::CreateSurface()
+{
+	// Windows specific implementation: https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/00_Window_surface.html#:~:text=To%20access%20native%20platform%20functions%2C%20you%20need%20to%20update%20the%20includes%20at%20the%20top%3A
+	if (!glfwCreateWindowSurface(m_VkInstance, m_Window, nullptr, &m_Surface))
+		throw std::runtime_error("Failed to create window surface");
 }
 
 void HelloTriangleApp::PickPhysicalDevice()
@@ -238,12 +250,20 @@ QueueFamilyIndices HelloTriangleApp::FindQueueFamilies(VkPhysicalDevice device)
 	{
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			indices.GraphicsFamily = i;
+		
+		// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/00_Window_surface.html#_querying_for_presentation_support
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);
+		if (presentSupport)
+			indices.PresentFamily = i;
 
 		if (indices.IsComplete())
 			break;
 
 		i++;
 	}
+
+	
 
 	return indices;
 }
@@ -253,19 +273,29 @@ void HelloTriangleApp::CreateLogicalDevice()
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/04_Logical_device_and_queues.html#_introduction
 	QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
 
-	VkDeviceQueueCreateInfo queueCreateInfo{};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueFamilyIndex = indices.GraphicsFamily.value();
-	queueCreateInfo.queueCount = 1;
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	const std::set<uint32_t> uniqueQueueFamilies = {
+		indices.GraphicsFamily.value(),
+		indices.PresentFamily.value()
+	};
+
 	float queuePriority = 1.0f;
-	queueCreateInfo.pQueuePriorities = &queuePriority;
+	for (uint32_t queueFamily : uniqueQueueFamilies)
+	{
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+		queueCreateInfos.push_back(queueCreateInfo);
+	}
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
-	createInfo.queueCreateInfoCount = 1;
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pEnabledFeatures = &deviceFeatures;
 
 	createInfo.enabledExtensionCount = 0;
@@ -281,8 +311,9 @@ void HelloTriangleApp::CreateLogicalDevice()
 		createInfo.enabledLayerCount = 0;
 	}
 
-	if (vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_VkDevice) != VK_SUCCESS)
+	if (vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_Device) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create Vulkan logical device");
 
-	vkGetDeviceQueue(m_VkDevice, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
+	vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
+	vkGetDeviceQueue(m_Device, indices.PresentFamily.value(), 0, &m_PresentQueue);
 }
