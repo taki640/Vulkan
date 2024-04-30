@@ -43,6 +43,8 @@ void HelloTriangleApp::InitVulkan()
 {
 	CreateVulkanInstance();
 	SetupDebugMessenger();
+	PickPhysicalDevice();
+	CreateLogicalDevice();
 }
 
 void HelloTriangleApp::MainLoop()
@@ -55,6 +57,7 @@ void HelloTriangleApp::MainLoop()
 
 void HelloTriangleApp::CleanupVulkan()
 {
+	vkDestroyDevice(m_VkDevice, nullptr);
 	if (VALIDATION_LAYERS_ENABLED)
 		DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugMessenger, nullptr);
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/01_Instance.html#_cleaning_up
@@ -65,35 +68,6 @@ void HelloTriangleApp::CleanupWindow()
 {
 	glfwDestroyWindow(m_Window);
 	glfwTerminate();
-}
-
-void HelloTriangleApp::SetupDebugMessenger()
-{
-	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/02_Validation_layers.html#_message_callback
-	if (!VALIDATION_LAYERS_ENABLED)
-		return;
-
-	VkDebugUtilsMessengerCreateInfoEXT createInfo;
-	PopulateDebugMessengerCreateInfo(createInfo);
-
-	if (CreateDebugUtilsMessengerEXT(m_VkInstance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
-		throw std::runtime_error("failed to set up debug messenger!");
-}
-
-VkResult HelloTriangleApp::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
-{
-	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-	if (func != nullptr)
-		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-	else
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
-
-void HelloTriangleApp::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator)
-{
-	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-	if (func != nullptr)
-		func(instance, debugMessenger, pAllocator);
 }
 
 void HelloTriangleApp::CreateVulkanInstance()
@@ -186,4 +160,129 @@ std::vector<const char*> HelloTriangleApp::GetRequiredExtensions()
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
 	return extensions;
+}
+
+void HelloTriangleApp::SetupDebugMessenger()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/02_Validation_layers.html#_message_callback
+	if (!VALIDATION_LAYERS_ENABLED)
+		return;
+
+	VkDebugUtilsMessengerCreateInfoEXT createInfo;
+	PopulateDebugMessengerCreateInfo(createInfo);
+
+	if (CreateDebugUtilsMessengerEXT(m_VkInstance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
+		throw std::runtime_error("failed to set up debug messenger!");
+}
+
+VkResult HelloTriangleApp::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
+	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+	if (func != nullptr)
+		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+	else
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+}
+
+void HelloTriangleApp::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator)
+{
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != nullptr)
+		func(instance, debugMessenger, pAllocator);
+}
+
+void HelloTriangleApp::PickPhysicalDevice()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/03_Physical_devices_and_queue_families.html#_selecting_a_physical_device
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(m_VkInstance, &deviceCount, nullptr);
+	if (deviceCount == 0)
+		throw std::runtime_error("Failed to find GPUs with Vulkan support");
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(m_VkInstance, &deviceCount, devices.data());
+
+	for (const VkPhysicalDevice& device : devices)
+	{
+		if (IsDeviceSuitable(device))
+		{
+			m_PhysicalDevice = device;
+			break;
+		}
+	}
+
+	if (m_PhysicalDevice == VK_NULL_HANDLE)
+		throw std::runtime_error("Failed to find a suitable GPU");
+
+	// We could also check all devices and give a score and then choose the highest
+	// Like this: https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/03_Physical_devices_and_queue_families.html#_base_device_suitability_checks
+}
+
+bool HelloTriangleApp::IsDeviceSuitable(VkPhysicalDevice device)
+{
+	QueueFamilyIndices indices = FindQueueFamilies(device);
+	return indices.IsComplete();
+}
+
+QueueFamilyIndices HelloTriangleApp::FindQueueFamilies(VkPhysicalDevice device)
+{
+	QueueFamilyIndices indices;
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	int i = 0;
+	for (const auto& queueFamily : queueFamilies)
+	{
+		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			indices.GraphicsFamily = i;
+
+		if (indices.IsComplete())
+			break;
+
+		i++;
+	}
+
+	return indices;
+}
+
+void HelloTriangleApp::CreateLogicalDevice()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/04_Logical_device_and_queues.html#_introduction
+	QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueFamilyIndex = indices.GraphicsFamily.value();
+	queueCreateInfo.queueCount = 1;
+	float queuePriority = 1.0f;
+	queueCreateInfo.pQueuePriorities = &queuePriority;
+
+	VkPhysicalDeviceFeatures deviceFeatures{};
+
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.pQueueCreateInfos = &queueCreateInfo;
+	createInfo.queueCreateInfoCount = 1;
+	createInfo.pEnabledFeatures = &deviceFeatures;
+
+	createInfo.enabledExtensionCount = 0;
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/04_Logical_device_and_queues.html#_creating_the_logical_device:~:text=Previous%20implementations%20of,with%20older%20implementations%3A
+	if (VALIDATION_LAYERS_ENABLED)
+	{
+		createInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
+		createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
+	}
+	else
+	{
+		createInfo.enabledLayerCount = 0;
+	}
+
+	if (vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_VkDevice) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create Vulkan logical device");
+
+	vkGetDeviceQueue(m_VkDevice, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
 }

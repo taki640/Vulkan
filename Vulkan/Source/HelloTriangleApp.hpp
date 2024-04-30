@@ -5,6 +5,15 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <optional>
+
+struct QueueFamilyIndices
+{
+	std::optional<uint32_t> GraphicsFamily = 0;
+
+	bool IsComplete() const { return GraphicsFamily.has_value(); }
+};
+
 class HelloTriangleApp
 {
 public:
@@ -24,6 +33,9 @@ private:
 	GLFWwindow* m_Window;
 	VkInstance m_VkInstance;
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
+	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;	// Implicitly destroyed when the VkInstance is destroyed
+	VkDevice m_VkDevice;
+	VkQueue m_GraphicsQueue;
 
 	void InitWindow();
 	void InitVulkan();
@@ -31,11 +43,21 @@ private:
 	void CleanupVulkan();
 	void CleanupWindow();
 
+	// Vulkan instance creation
 	void CreateVulkanInstance();
 	bool CheckValidationLayerSupport();
 	std::vector<const char*> GetRequiredExtensions();
 
+	// Debug messenger creation
 	void SetupDebugMessenger();
 	VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
 	void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator);
+
+	// Picking a suitable physical device
+	void PickPhysicalDevice();
+	bool IsDeviceSuitable(VkPhysicalDevice device);
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+
+	// Logical device
+	void CreateLogicalDevice();
 };
