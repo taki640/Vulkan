@@ -1,5 +1,6 @@
 #include "HelloTriangleApp.hpp"
 
+#include <algorithm>
 #include <set>
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -25,8 +26,8 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
 
 void HelloTriangleApp::Run()
 {
-	InitVulkan();
 	InitWindow();
+	InitVulkan();
 	MainLoop();
 	CleanupVulkan();
 	CleanupWindow();
@@ -45,8 +46,10 @@ void HelloTriangleApp::InitVulkan()
 {
 	CreateVulkanInstance();
 	SetupDebugMessenger();
+	CreateSurface();
 	PickPhysicalDevice();
 	CreateLogicalDevice();
+	CreateSwapChain();
 }
 
 void HelloTriangleApp::MainLoop()
@@ -59,6 +62,7 @@ void HelloTriangleApp::MainLoop()
 
 void HelloTriangleApp::CleanupVulkan()
 {
+	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
 	vkDestroyDevice(m_Device, nullptr);
 	if (VALIDATION_LAYERS_ENABLED)
 		DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugMessenger, nullptr);
@@ -93,7 +97,7 @@ void HelloTriangleApp::CreateVulkanInstance()
 	createInfo.pApplicationInfo = &appInfo;
 
 	auto extensions = GetRequiredExtensions();
-	createInfo.enabledExtensionCount = extensions.size();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	createInfo.ppEnabledExtensionNames = extensions.data();
 
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/02_Validation_layers.html#_debugging_instance_creation_and_destruction
@@ -199,7 +203,7 @@ void HelloTriangleApp::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebu
 void HelloTriangleApp::CreateSurface()
 {
 	// Windows specific implementation: https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/00_Window_surface.html#:~:text=To%20access%20native%20platform%20functions%2C%20you%20need%20to%20update%20the%20includes%20at%20the%20top%3A
-	if (!glfwCreateWindowSurface(m_VkInstance, m_Window, nullptr, &m_Surface))
+	if (glfwCreateWindowSurface(m_VkInstance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create window surface");
 }
 
@@ -233,7 +237,16 @@ void HelloTriangleApp::PickPhysicalDevice()
 bool HelloTriangleApp::IsDeviceSuitable(VkPhysicalDevice device)
 {
 	QueueFamilyIndices indices = FindQueueFamilies(device);
-	return indices.IsComplete();
+	
+	bool extensionsSupported = CheckDeviceExtensionSupport(device);
+	bool swapChainAdequate = false;
+	if (extensionsSupported)	// Only query after making sure they are available
+	{
+		SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
+		swapChainAdequate = !swapChainSupport.Formats.empty() && !swapChainSupport.PresentModes.empty();
+	}
+
+	return indices.IsComplete() && extensionsSupported && swapChainAdequate;
 }
 
 QueueFamilyIndices HelloTriangleApp::FindQueueFamilies(VkPhysicalDevice device)
@@ -262,8 +275,6 @@ QueueFamilyIndices HelloTriangleApp::FindQueueFamilies(VkPhysicalDevice device)
 
 		i++;
 	}
-
-	
 
 	return indices;
 }
@@ -297,8 +308,8 @@ void HelloTriangleApp::CreateLogicalDevice()
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pEnabledFeatures = &deviceFeatures;
-
-	createInfo.enabledExtensionCount = 0;
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(DEVICE_EXTENSIONS.size());
+	createInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS.data();
 
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/04_Logical_device_and_queues.html#_creating_the_logical_device:~:text=Previous%20implementations%20of,with%20older%20implementations%3A
 	if (VALIDATION_LAYERS_ENABLED)
@@ -316,4 +327,152 @@ void HelloTriangleApp::CreateLogicalDevice()
 
 	vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
 	vkGetDeviceQueue(m_Device, indices.PresentFamily.value(), 0, &m_PresentQueue);
+}
+
+bool HelloTriangleApp::CheckDeviceExtensionSupport(VkPhysicalDevice device)
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_checking_for_swap_chain_support
+	uint32_t extensionCount;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+	std::set<std::string> requiredExtensions(DEVICE_EXTENSIONS.begin(), DEVICE_EXTENSIONS.end());
+	for (const VkExtensionProperties& extension : availableExtensions)
+		requiredExtensions.erase(extension.extensionName);
+
+	return requiredExtensions.empty();
+}
+
+SwapChainSupportDetails HelloTriangleApp::QuerySwapChainSupport(VkPhysicalDevice device)
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_querying_details_of_swap_chain_support
+	SwapChainSupportDetails details;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface, &details.Capabilities);
+
+	uint32_t formatCount;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
+	if (formatCount != 0)
+	{
+		details.Formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, details.Formats.data());
+	}
+
+	uint32_t presentModeCount;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
+	if (presentModeCount != 0)
+	{
+		details.PresentModes.resize(presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, details.PresentModes.data());
+	}
+
+	return details;
+}
+
+void HelloTriangleApp::CreateSwapChain()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_creating_the_swap_chain
+	SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice);
+
+	VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.Formats);
+	VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
+	VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities);
+	uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1;
+	if (swapChainSupport.Capabilities.maxImageCount > 0 && imageCount > swapChainSupport.Capabilities.maxImageCount)
+		imageCount = swapChainSupport.Capabilities.maxImageCount;
+
+	VkSwapchainCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = m_Surface;
+	createInfo.minImageCount = imageCount;
+	createInfo.imageFormat = surfaceFormat.format;
+	createInfo.imageColorSpace = surfaceFormat.colorSpace;
+	createInfo.imageExtent = extent;
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+	uint32_t queueFamilyIndices[] = {
+		indices.GraphicsFamily.value(),
+		indices.PresentFamily.value()
+	};
+
+	if (indices.GraphicsFamily != indices.PresentFamily)
+	{
+		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+		createInfo.queueFamilyIndexCount = 2;
+		createInfo.pQueueFamilyIndices = queueFamilyIndices;
+	}
+	else
+	{
+		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		createInfo.queueFamilyIndexCount = 0;		// optional
+		createInfo.pQueueFamilyIndices = nullptr;	// optional
+	}
+
+	createInfo.preTransform = swapChainSupport.Capabilities.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.presentMode = presentMode;
+	createInfo.clipped = VK_TRUE;
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+	if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create swap chain");
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_retrieving_the_swap_chain_images
+	vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, nullptr);
+	m_SwapchainImages.resize(imageCount);
+	vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, m_SwapchainImages.data());
+
+	m_SwapchainImageFormat = surfaceFormat.format;
+	m_SwapchainExtent = extent;
+}
+
+VkSurfaceFormatKHR HelloTriangleApp::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_surface_format
+	for (const VkSurfaceFormatKHR& availableFormat : availableFormats)
+	{
+		if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			return availableFormat;
+	}
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_querying_details_of_swap_chain_support:~:text=If%20that%20also%20fails%20then%20we%20could%20start%20ranking%20the%20available%20formats%20based%20on%20how%20%22good%22%20they%20are%2C%20but%20in%20most%20cases%20it%E2%80%99s%20okay%20to%20just%20settle%20with%20the%20first%20format%20that%20is%20specified.
+	return availableFormats[0];
+}
+
+VkPresentModeKHR HelloTriangleApp::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_presentation_mode
+	for (const VkPresentModeKHR& availablePresentMode : availablePresentModes)
+	{
+		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)	// Basically a vsync but better, with less tearing, bad for mobile though, uses more energy
+			return availablePresentMode;
+	}
+
+	return VK_PRESENT_MODE_FIFO_KHR;	// This mode (basically vsync) is guaranteed to be available
+}
+
+VkExtent2D HelloTriangleApp::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+{
+	if (capabilities.currentExtent.width != UINT32_MAX)
+	{
+		return capabilities.currentExtent;
+	}
+	else
+	{
+		int width;
+		int height;
+		glfwGetFramebufferSize(m_Window, &width, &height);
+
+		VkExtent2D actualExtent = {
+			static_cast<uint32_t>(width),
+			static_cast<uint32_t>(height)
+		};
+
+		actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+		actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+		return actualExtent;
+	}
 }

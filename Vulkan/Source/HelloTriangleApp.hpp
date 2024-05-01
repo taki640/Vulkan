@@ -18,6 +18,13 @@ struct QueueFamilyIndices
 	}
 };
 
+struct SwapChainSupportDetails
+{
+	VkSurfaceCapabilitiesKHR Capabilities;
+	std::vector<VkSurfaceFormatKHR> Formats;
+	std::vector<VkPresentModeKHR> PresentModes;
+};
+
 class HelloTriangleApp
 {
 public:
@@ -34,6 +41,10 @@ private:
 		"VK_LAYER_KHRONOS_validation"
 	};
 
+	static constexpr std::array<const char*, 1> DEVICE_EXTENSIONS = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+
 	GLFWwindow* m_Window;
 	VkInstance m_VkInstance;
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
@@ -42,6 +53,10 @@ private:
 	VkQueue m_GraphicsQueue;
 	VkSurfaceKHR m_Surface;
 	VkQueue m_PresentQueue;
+	VkSwapchainKHR m_Swapchain;
+	std::vector<VkImage> m_SwapchainImages;	// Automatically destroyed by the VkSwapchainKHR
+	VkFormat m_SwapchainImageFormat;
+	VkExtent2D m_SwapchainExtent;
 
 	void InitWindow();
 	void InitVulkan();
@@ -69,4 +84,14 @@ private:
 
 	// Logical device
 	void CreateLogicalDevice();
+
+	// Check extension supports
+	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
+
+	// Swap chain creation
+	void CreateSwapChain();
+	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
+	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 };
