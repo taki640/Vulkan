@@ -64,6 +64,9 @@ private:
 	std::vector<VkFramebuffer> m_SwapchainFramebuffers;
 	VkCommandPool m_CommandPool;
 	VkCommandBuffer m_CommandBuffer;
+	VkSemaphore m_ImageAvailableSemaphore;
+	VkSemaphore m_RenderFinishedSemaphore;
+	VkFence m_InFlightFence;
 
 	void InitWindow();
 	void InitVulkan();
@@ -117,4 +120,8 @@ private:
 	void CreateCommandPool();
 	void CreateCommandBuffer();
 	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+	// DRAWING!!!
+	void DrawFrame();
+	void CreateSyncObjects();
 };
