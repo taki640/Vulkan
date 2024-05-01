@@ -70,6 +70,9 @@ void HelloTriangleApp::InitVulkan()
 	CreateImageViews();
 	CreateRenderPass();
 	CreateGraphicsPipeline();
+	CreateFramebuffers();
+	CreateCommandPool();
+	CreateCommandBuffer();
 }
 
 void HelloTriangleApp::MainLoop()
@@ -82,6 +85,7 @@ void HelloTriangleApp::MainLoop()
 
 void HelloTriangleApp::CleanupVulkan()
 {
+	vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
 	for (VkFramebuffer framebuffer : m_SwapchainFramebuffers)
 		vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
 	vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
@@ -720,6 +724,7 @@ VkShaderModule HelloTriangleApp::CreateShaderModule(const std::vector<char>& cod
 
 void HelloTriangleApp::CreateFramebuffers()
 {
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/00_Framebuffers.html
 	m_SwapchainFramebuffers.resize(m_SwapchainImageViews.size());
 
 	for (size_t i = 0; i < m_SwapchainImageViews.size(); i++)
@@ -738,4 +743,80 @@ void HelloTriangleApp::CreateFramebuffers()
 		if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS)
 			throw std::runtime_error("Failed to create framebuffer");
 	}
+}
+
+void HelloTriangleApp::CreateCommandPool()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html
+	QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
+
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
+
+	if (vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create command pool");
+}
+
+void HelloTriangleApp::CreateCommandBuffer()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html#_command_buffer_allocation
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = m_CommandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 1;
+
+	if (vkAllocateCommandBuffers(m_Device, &allocInfo, &m_CommandBuffer) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate command buffers");
+}
+
+void HelloTriangleApp::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html#_command_buffer_recording
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0;					// Optional
+	beginInfo.pInheritanceInfo = nullptr;	// Optional
+
+	if (vkBeginCommandBuffer(m_CommandBuffer, &beginInfo) != VK_SUCCESS)
+		throw std::runtime_error("Failed to begin recording command buffer");
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html#_starting_a_render_pass
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = m_RenderPass;
+	renderPassInfo.framebuffer = m_SwapchainFramebuffers[imageIndex];
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = m_SwapchainExtent;
+	VkClearValue clearColor = {{{ 0.0f, 0.0f, 0.0f, 1.0f }}};
+	renderPassInfo.clearValueCount = 1;
+	renderPassInfo.pClearValues = &clearColor;
+
+	vkCmdBeginRenderPass(m_CommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html#_basic_drawing_commands
+	vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
+
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(m_SwapchainExtent.width);
+	viewport.height = static_cast<float>(m_SwapchainExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = m_SwapchainExtent;
+	vkCmdSetScissor(m_CommandBuffer, 0, 1, &scissor);
+
+	vkCmdDraw(m_CommandBuffer, 3, 1, 0, 0);
+
+	vkCmdEndRenderPass(m_CommandBuffer);
+
+	if (vkEndCommandBuffer(m_CommandBuffer) != VK_SUCCESS)
+		throw std::runtime_error("Failed to record command buffer");
 }

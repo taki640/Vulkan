@@ -62,6 +62,8 @@ private:
 	VkPipelineLayout m_PipelineLayout;
 	VkPipeline m_GraphicsPipeline;
 	std::vector<VkFramebuffer> m_SwapchainFramebuffers;
+	VkCommandPool m_CommandPool;
+	VkCommandBuffer m_CommandBuffer;
 
 	void InitWindow();
 	void InitVulkan();
@@ -110,4 +112,9 @@ private:
 
 	// Framebuffers
 	void CreateFramebuffers();
+
+	// Command buffers
+	void CreateCommandPool();
+	void CreateCommandBuffer();
+	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 };
