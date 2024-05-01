@@ -58,6 +58,7 @@ private:
 	VkFormat m_SwapchainImageFormat;
 	VkExtent2D m_SwapchainExtent;
 	std::vector<VkImageView> m_SwapchainImageViews;
+	VkPipelineLayout m_PipelineLayout;
 
 	void InitWindow();
 	void InitVulkan();
@@ -98,4 +99,8 @@ private:
 
 	// Image views
 	void CreateImageViews();
+
+	// Graphics pipeline
+	void CreateGraphicsPipeline();
+	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 };
