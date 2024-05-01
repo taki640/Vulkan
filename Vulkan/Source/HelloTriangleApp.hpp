@@ -57,6 +57,7 @@ private:
 	std::vector<VkImage> m_SwapchainImages;	// Automatically destroyed by the VkSwapchainKHR
 	VkFormat m_SwapchainImageFormat;
 	VkExtent2D m_SwapchainExtent;
+	std::vector<VkImageView> m_SwapchainImageViews;
 
 	void InitWindow();
 	void InitVulkan();
@@ -94,4 +95,7 @@ private:
 	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+
+	// Image views
+	void CreateImageViews();
 };
