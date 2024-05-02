@@ -2,11 +2,11 @@
 
 #include "Base.hpp"
 
-#include "Vertex.hpp"
-
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+
+#include "Vertex.hpp"
 
 #include <optional>
 
@@ -52,9 +52,9 @@ private:
 	};
 
 	const std::vector<Vertex> TRIANGLE_VERTICES = {
-		{ {  0.0f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
-		{ {  0.5f,  0.5f }, { 0.0f, 1.0f, 0.0f } },
-		{ { -0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f } }
+		{ {  0.0f, -0.5f }, { 1.0f, 0.35f, 1.0f } },
+		{ {  0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } },
+		{ { -0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } }
 	};
 
 	GLFWwindow* m_Window;
@@ -80,6 +80,8 @@ private:
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;
 	std::vector<VkFence> m_InFlightFences;
 	uint32_t m_CurrentFrame = 0;
+	VkBuffer m_VertexBuffer;
+	VkDeviceMemory m_VertexBufferMemory;
 
 	void InitWindow();
 	void InitVulkan();
@@ -139,4 +141,8 @@ private:
 	// DRAWING!!!
 	void DrawFrame();
 	void CreateSyncObjects();
+
+	// Vertex buffer
+	void CreateVertexBuffer();
+	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 };
