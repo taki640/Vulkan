@@ -41,6 +41,12 @@ static std::vector<char> ReadFile(const std::string& filename)
 	return buffer;
 }
 
+static void FramebufferResizeCallback(GLFWwindow* window, int width, int height)
+{
+	HelloTriangleApp* app = reinterpret_cast<HelloTriangleApp*>(glfwGetWindowUserPointer(window));
+	app->m_FramebufferResized = true;
+}
+
 void HelloTriangleApp::Run()
 {
 	InitWindow();
@@ -54,9 +60,9 @@ void HelloTriangleApp::InitWindow()
 {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
 	m_Window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Vulkan", nullptr, nullptr);
+	glfwSetWindowUserPointer(m_Window, this);
+	glfwSetFramebufferSizeCallback(m_Window, FramebufferResizeCallback);
 }
 
 void HelloTriangleApp::InitVulkan()
@@ -89,22 +95,22 @@ void HelloTriangleApp::MainLoop()
 
 void HelloTriangleApp::CleanupVulkan()
 {
+	CleanupSwapChain();
+
+	vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
+
+	vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
 		vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
 		vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
 	}
-	vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
-	for (VkFramebuffer framebuffer : m_SwapchainFramebuffers)
-		vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
-	vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
-	vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
-	for (VkImageView imageView : m_SwapchainImageViews)
-		vkDestroyImageView(m_Device, imageView, nullptr);
 
-	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+	vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+
 	vkDestroyDevice(m_Device, nullptr);
 	if (VALIDATION_LAYERS_ENABLED)
 		DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugMessenger, nullptr);
@@ -743,6 +749,37 @@ VkShaderModule HelloTriangleApp::CreateShaderModule(const std::vector<char>& cod
 	return shaderModule;
 }
 
+void HelloTriangleApp::RecreateSwapChain()
+{
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/04_Swap_chain_recreation.html#_handling_minimization
+	int width = 0;
+	int height = 0;
+	glfwGetFramebufferSize(m_Window, &width, &height);
+	while (width == 0 || height == 0)
+	{
+		glfwGetFramebufferSize(m_Window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/04_Swap_chain_recreation.html#_recreating_the_swap_chain
+	vkDeviceWaitIdle(m_Device);
+
+	CleanupSwapChain();
+
+	CreateSwapChain();
+	CreateImageViews();
+	CreateFramebuffers();
+}
+
+void HelloTriangleApp::CleanupSwapChain()
+{
+	for (auto framebuffer : m_SwapchainFramebuffers)
+		vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+	for (auto imageView : m_SwapchainImageViews)
+		vkDestroyImageView(m_Device, imageView, nullptr);
+	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+}
+
 void HelloTriangleApp::CreateFramebuffers()
 {
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/00_Framebuffers.html
@@ -848,11 +885,25 @@ void HelloTriangleApp::DrawFrame()
 {
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/02_Rendering_and_presentation.html#_waiting_for_the_previous_frame
 	vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
-	vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/02_Rendering_and_presentation.html#_acquiring_an_image_from_the_swap_chain
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/04_Swap_chain_recreation.html#_suboptimal_or_out_of_date_swap_chain
+	if (result == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		RecreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+	{
+		throw std::runtime_error("Failed to acquire swap chain image");
+	}
+
+	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/04_Swap_chain_recreation.html#_fixing_a_deadlock
+	// Only reset the fence if we are submitting work
+	vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/02_Rendering_and_presentation.html#_recording_the_command_buffer
 	vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
@@ -886,7 +937,15 @@ void HelloTriangleApp::DrawFrame()
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.pResults = nullptr;	// Optional
 
-	vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FramebufferResized)
+	{
+		m_FramebufferResized = false;
+		RecreateSwapChain();
+	}
+	else if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to present swap chain image");
 
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }

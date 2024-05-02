@@ -28,6 +28,8 @@ struct SwapChainSupportDetails
 class HelloTriangleApp
 {
 public:
+	bool m_FramebufferResized = false;
+
 	void Run();
 private:
 	static constexpr uint32_t WINDOW_WIDTH = 800;
@@ -106,6 +108,8 @@ private:
 	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+	void RecreateSwapChain();
+	void CleanupSwapChain();
 
 	// Image views
 	void CreateImageViews();
