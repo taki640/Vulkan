@@ -2,8 +2,11 @@
 
 #include "Base.hpp"
 
+#include "Vertex.hpp"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include <optional>
 
@@ -46,6 +49,12 @@ private:
 
 	static constexpr std::array<const char*, 1> DEVICE_EXTENSIONS = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+
+	const std::vector<Vertex> TRIANGLE_VERTICES = {
+		{ {  0.0f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
+		{ {  0.5f,  0.5f }, { 0.0f, 1.0f, 0.0f } },
+		{ { -0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f } }
 	};
 
 	GLFWwindow* m_Window;
