@@ -79,6 +79,7 @@ void HelloTriangleApp::InitVulkan()
 	CreateFramebuffers();
 	CreateCommandPool();
 	CreateVertexBuffer();
+	CreateIndexBuffer();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -97,6 +98,9 @@ void HelloTriangleApp::MainLoop()
 void HelloTriangleApp::CleanupVulkan()
 {
 	CleanupSwapChain();
+
+	vkDestroyBuffer(m_Device, m_IndexBuffer, nullptr);
+	vkFreeMemory(m_Device, m_IndexBufferMemory, nullptr);
 
 	vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
 	vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
@@ -885,7 +889,10 @@ void HelloTriangleApp::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+	// vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(QUAD_INDICES.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -990,7 +997,8 @@ void HelloTriangleApp::CreateSyncObjects()
 
 void HelloTriangleApp::CreateVertexBuffer()
 {
-	VkDeviceSize bufferSize = sizeof(TRIANGLE_VERTICES[0]) * TRIANGLE_VERTICES.size();
+	// VkDeviceSize bufferSize = sizeof(TRIANGLE_VERTICES[0]) * TRIANGLE_VERTICES.size();
+	VkDeviceSize bufferSize = sizeof(QUAD_VERTICES[0]) * QUAD_VERTICES.size();
 	// https://docs.vulkan.org/tutorial/latest/04_Vertex_buffers/02_Staging_buffer.html#_using_a_staging_buffer
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -999,7 +1007,8 @@ void HelloTriangleApp::CreateVertexBuffer()
 	// https://docs.vulkan.org/tutorial/latest/04_Vertex_buffers/01_Vertex_buffer_creation.html#_filling_the_vertex_buffer
 	void* data;
 	vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, TRIANGLE_VERTICES.data(), (size_t)bufferSize);
+	//memcpy(data, TRIANGLE_VERTICES.data(), (size_t)bufferSize);
+	memcpy(data, QUAD_VERTICES.data(), (size_t)bufferSize);
 	vkUnmapMemory(m_Device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
@@ -1085,4 +1094,25 @@ void HelloTriangleApp::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevi
 	vkQueueWaitIdle(m_GraphicsQueue);
 
 	vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &commandBuffer);
+}
+
+void HelloTriangleApp::CreateIndexBuffer()
+{
+	// https://docs.vulkan.org/tutorial/latest/04_Vertex_buffers/03_Index_buffer.html#_index_buffer_creation
+	VkDeviceSize bufferSize = sizeof(QUAD_INDICES[0]) * QUAD_INDICES.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, QUAD_INDICES.data(), (size_t)bufferSize);
+	vkUnmapMemory(m_Device, stagingBufferMemory);
+
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+	CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
+
+	vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
+	vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
 }

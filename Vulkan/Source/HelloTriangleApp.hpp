@@ -51,10 +51,21 @@ private:
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
-	const std::vector<Vertex> TRIANGLE_VERTICES = {
-		{ {  0.0f, -0.5f }, { 1.0f, 0.35f, 1.0f } },
-		{ {  0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } },
-		{ { -0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } }
+	// const std::vector<Vertex> TRIANGLE_VERTICES = {
+	// 	{ {  0.0f, -0.5f }, { 1.0f, 0.35f, 1.0f } },
+	// 	{ {  0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } },
+	// 	{ { -0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } }
+	// };
+
+	const std::vector<Vertex> QUAD_VERTICES = {
+		{ { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
+		{ {  0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f } },
+		{ {  0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f } },
+		{ { -0.5f,  0.5f }, { 1.0f, 1.0f, 1.0f } }
+	};
+
+	const std::vector<uint16_t> QUAD_INDICES = {
+		0, 1, 2, 2, 3, 0
 	};
 
 	GLFWwindow* m_Window;
@@ -82,6 +93,8 @@ private:
 	uint32_t m_CurrentFrame = 0;
 	VkBuffer m_VertexBuffer;
 	VkDeviceMemory m_VertexBufferMemory;
+	VkBuffer m_IndexBuffer;
+	VkDeviceMemory m_IndexBufferMemory;
 
 	void InitWindow();
 	void InitVulkan();
@@ -149,4 +162,7 @@ private:
 	// Staging buffer
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	// Index buffer
+	void CreateIndexBuffer();
 };
