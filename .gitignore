@@ -3,11 +3,7 @@
 Bin/
 
 # Files
-*.vcxproj
 *.vcxproj.user
-*.vcxproj.filters
-*.sln
-*.sln.dotsettings
 *.DotSettings.user
 *.aps
 *.spv
