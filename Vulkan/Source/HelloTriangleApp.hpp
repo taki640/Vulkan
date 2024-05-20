@@ -108,6 +108,8 @@ private:
 	std::vector<void*> m_UniformBuffersMapped;
 	VkDescriptorPool m_DescriptorPool;
 	std::vector<VkDescriptorSet> m_DescriptorSets;
+	VkImage m_TextureImage;
+	VkDeviceMemory m_TextureImageMemory;
 
 	void InitWindow();
 	void InitVulkan();
@@ -188,4 +190,13 @@ private:
 	// Descriptor pool and sets
 	void CreateDescriptorPool();
 	void CreateDescriptorSets();
+
+	// Texture mapping
+	// Images
+	void CreateTextureImage();
+	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	VkCommandBuffer BeginSingleTimeCommands();
+	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 };
