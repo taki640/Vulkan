@@ -28,6 +28,13 @@ struct SwapChainSupportDetails
 	std::vector<VkPresentModeKHR> PresentModes;
 };
 
+struct UniformBufferObject
+{
+	glm::mat4 Model;
+	glm::mat4 View;
+	glm::mat4 Projection;
+};
+
 class HelloTriangleApp
 {
 public:
@@ -82,6 +89,7 @@ private:
 	VkExtent2D m_SwapchainExtent;
 	std::vector<VkImageView> m_SwapchainImageViews;
 	VkRenderPass m_RenderPass;
+	VkDescriptorSetLayout m_DescriptorSetLayout;
 	VkPipelineLayout m_PipelineLayout;
 	VkPipeline m_GraphicsPipeline;
 	std::vector<VkFramebuffer> m_SwapchainFramebuffers;
@@ -95,6 +103,9 @@ private:
 	VkDeviceMemory m_VertexBufferMemory;
 	VkBuffer m_IndexBuffer;
 	VkDeviceMemory m_IndexBufferMemory;
+	std::vector<VkBuffer> m_UniformBuffers;
+	std::vector<VkDeviceMemory> m_UniformBuffersMemory;
+	std::vector<void*> m_UniformBuffersMapped;
 
 	void InitWindow();
 	void InitVulkan();
@@ -165,4 +176,10 @@ private:
 
 	// Index buffer
 	void CreateIndexBuffer();
+
+	// Uniform buffers
+	// Desciptor layout and buffer
+	void CreateDescriptorSetLayout();
+	void CreateUniformBuffers();
+	void UpdateUniformBuffer();
 };

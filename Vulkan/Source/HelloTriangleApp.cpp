@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <set>
 #include <fstream>
+#include <chrono>
+
+#include <glm/gtc/matrix_transform.hpp>
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -75,11 +78,13 @@ void HelloTriangleApp::InitVulkan()
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
+	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateFramebuffers();
 	CreateCommandPool();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
+	CreateUniformBuffers();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -104,6 +109,14 @@ void HelloTriangleApp::CleanupVulkan()
 
 	vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
 	vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		vkDestroyBuffer(m_Device, m_UniformBuffers[i], nullptr);
+		vkFreeMemory(m_Device, m_UniformBuffersMemory[i], nullptr);
+	}
+
+	vkDestroyDescriptorSetLayout(m_Device, m_DescriptorSetLayout, nullptr);
 
 	vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
@@ -714,8 +727,8 @@ void HelloTriangleApp::CreateGraphicsPipeline()
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/02_Fixed_functions.html#_pipeline_layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 0; // Optional
-	pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -928,6 +941,9 @@ void HelloTriangleApp::DrawFrame()
 	vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 	RecordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex);
 
+	// https://docs.vulkan.org/tutorial/latest/05_Uniform_buffers/00_Descriptor_set_layout_and_buffer.html#_updating_uniform_data
+	UpdateUniformBuffer();
+
 	// https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/02_Rendering_and_presentation.html#_submitting_the_command_buffer
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1115,4 +1131,54 @@ void HelloTriangleApp::CreateIndexBuffer()
 
 	vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
 	vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
+}
+
+void HelloTriangleApp::CreateDescriptorSetLayout()
+{
+	// https://docs.vulkan.org/tutorial/latest/05_Uniform_buffers/00_Descriptor_set_layout_and_buffer.html#_descriptor_set_layout
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	uboLayoutBinding.pImmutableSamplers = nullptr;	// Optional
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create descriptor set layout");
+}
+
+void HelloTriangleApp::CreateUniformBuffers()
+{
+	// https://docs.vulkan.org/tutorial/latest/05_Uniform_buffers/00_Descriptor_set_layout_and_buffer.html#_uniform_buffer
+	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+	m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	m_UniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	m_UniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_UniformBuffers[i], m_UniformBuffersMemory[i]);
+		vkMapMemory(m_Device, m_UniformBuffersMemory[i], 0, bufferSize, 0, &m_UniformBuffersMapped[i]);
+	}
+}
+
+void HelloTriangleApp::UpdateUniformBuffer()
+{
+	static std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
+
+	std::chrono::steady_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+	UniformBufferObject ubo{};
+	ubo.Model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.View = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.Projection = glm::perspective(glm::radians(45.0f), (float)m_SwapchainExtent.width / (float)m_SwapchainExtent.height, 0.1f, 10.0f);
+	ubo.Projection[1][1] *= -1;
+
+	memcpy(m_UniformBuffersMapped[m_CurrentFrame], &ubo, sizeof(ubo));
 }
