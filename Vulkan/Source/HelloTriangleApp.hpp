@@ -58,6 +58,9 @@ private:
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
+	static constexpr const char* MODEL_PATH = "models/viking_room.obj";
+	static constexpr const char* TEXTURE_PATH = "textures/viking_room.png";
+
 	// const std::vector<Vertex> TRIANGLE_VERTICES = {
 	// 	{ {  0.0f, -0.5f }, { 1.0f, 0.35f, 1.0f } },
 	// 	{ {  0.5f,  0.5f }, { 1.0f, 0.35f, 1.0f } },
@@ -129,6 +132,8 @@ private:
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;
 	std::vector<VkFence> m_InFlightFences;
 	uint32_t m_CurrentFrame = 0;
+	std::vector<Vertex> m_ModelVertices;
+	std::vector<uint32_t> m_ModelIndices;
 	VkBuffer m_VertexBuffer;
 	VkDeviceMemory m_VertexBufferMemory;
 	VkBuffer m_IndexBuffer;
@@ -246,4 +251,8 @@ private:
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat format);
+
+	// Loading models
+	// Loading vertices and indices
+	void LoadModel();
 };

@@ -7,6 +7,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <stb/stb_image.h>
+#include <tinyobjloader/tiny_obj_loader.h>
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -87,6 +88,7 @@ void HelloTriangleApp::InitVulkan()
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
+	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
@@ -944,11 +946,12 @@ void HelloTriangleApp::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-	vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(QUAD_INDICES.size()), 1, 0, 0, 0);
+	// vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(QUAD_INDICES.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_ModelIndices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1057,7 +1060,8 @@ void HelloTriangleApp::CreateSyncObjects()
 void HelloTriangleApp::CreateVertexBuffer()
 {
 	// VkDeviceSize bufferSize = sizeof(TRIANGLE_VERTICES[0]) * TRIANGLE_VERTICES.size();
-	VkDeviceSize bufferSize = sizeof(QUAD_VERTICES[0]) * QUAD_VERTICES.size();
+	// VkDeviceSize bufferSize = sizeof(QUAD_VERTICES[0]) * QUAD_VERTICES.size();
+	VkDeviceSize bufferSize = sizeof(m_ModelVertices[0]) * m_ModelVertices.size();
 	// https://docs.vulkan.org/tutorial/latest/04_Vertex_buffers/02_Staging_buffer.html#_using_a_staging_buffer
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1067,7 +1071,8 @@ void HelloTriangleApp::CreateVertexBuffer()
 	void* data;
 	vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
 	//memcpy(data, TRIANGLE_VERTICES.data(), (size_t)bufferSize);
-	memcpy(data, QUAD_VERTICES.data(), (size_t)bufferSize);
+	//memcpy(data, QUAD_VERTICES.data(), (size_t)bufferSize);
+	memcpy(data, m_ModelVertices.data(), (size_t)bufferSize);
 	vkUnmapMemory(m_Device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
@@ -1136,7 +1141,8 @@ void HelloTriangleApp::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevi
 void HelloTriangleApp::CreateIndexBuffer()
 {
 	// https://docs.vulkan.org/tutorial/latest/04_Vertex_buffers/03_Index_buffer.html#_index_buffer_creation
-	VkDeviceSize bufferSize = sizeof(QUAD_INDICES[0]) * QUAD_INDICES.size();
+	// VkDeviceSize bufferSize = sizeof(QUAD_INDICES[0]) * QUAD_INDICES.size();
+	VkDeviceSize bufferSize = sizeof(m_ModelIndices[0]) * m_ModelIndices.size();
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1144,7 +1150,8 @@ void HelloTriangleApp::CreateIndexBuffer()
 
 	void* data;
 	vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, QUAD_INDICES.data(), (size_t)bufferSize);
+	// memcpy(data, QUAD_INDICES.data(), (size_t)bufferSize);
+	memcpy(data, m_ModelIndices.data(), (size_t)bufferSize);
 	vkUnmapMemory(m_Device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
@@ -1203,9 +1210,10 @@ void HelloTriangleApp::UpdateUniformBuffer()
 
 	std::chrono::steady_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+	float speed = 0.2f;
 
 	UniformBufferObject ubo{};
-	ubo.Model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.Model = glm::rotate(glm::mat4(1.0f), time * speed * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.View = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.Projection = glm::perspective(glm::radians(45.0f), (float)m_SwapchainExtent.width / (float)m_SwapchainExtent.height, 0.1f, 10.0f);
 	ubo.Projection[1][1] *= -1;
@@ -1319,7 +1327,7 @@ void HelloTriangleApp::CreateTextureImage()
 	int textureWidth;
 	int textureHeight;
 	int textureChannels;
-	stbi_uc* pixels = stbi_load("Textures/icantstopcryingoverthisbook.png", &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(TEXTURE_PATH, &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha);
 
 	if (pixels == nullptr)
 		throw std::runtime_error("Failed to load texture image");
@@ -1550,4 +1558,38 @@ VkFormat HelloTriangleApp::FindDepthFormat()
 bool HelloTriangleApp::HasStencilComponent(VkFormat format)
 {
 	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+}
+
+void HelloTriangleApp::LoadModel()
+{
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	std::string warn;
+	std::string err;
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH))
+		throw std::runtime_error(warn + err);
+
+	for (const tinyobj::shape_t& shape : shapes)
+	{
+		for (const auto& index : shape.mesh.indices)
+		{
+			Vertex vertex{};
+			vertex.Position = {
+				attrib.vertices[3 * index.vertex_index + 0],
+				attrib.vertices[3 * index.vertex_index + 1],
+				attrib.vertices[3 * index.vertex_index + 2]
+			};
+
+			vertex.TexCoord = {
+				attrib.texcoords[2 * index.texcoord_index + 0],
+				1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+			};
+
+			vertex.Color = { 1.0f, 1.0f, 1.0f };
+
+			m_ModelVertices.push_back(vertex);
+			m_ModelIndices.push_back((uint32_t)m_ModelIndices.size());
+		}
+	}
 }
