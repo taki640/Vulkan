@@ -148,10 +148,14 @@ private:
 	VkDeviceMemory m_TextureImageMemory;
 	VkImageView m_TextureImageView;
 	VkSampler m_TextureSampler;
+	VkImage m_ColorImage;
+	VkDeviceMemory m_ColorImageMemory;
+	VkImageView m_ColorImageView;
 	VkImage m_DepthImage;
 	VkDeviceMemory m_DepthImageMemory;
 	VkImageView m_DepthImageView;
 	bool m_Rotate = true;
+	VkSampleCountFlagBits m_MsaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 	void InitWindow();
 	void InitVulkan();
@@ -239,7 +243,7 @@ private:
 	// Texture mapping
 	// Images
 	void CreateTextureImage();
-	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
@@ -260,4 +264,8 @@ private:
 
 	// Generating Mipmaps
 	void GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight, uint32_t mipLevels);
+
+	// Multisampling
+	VkSampleCountFlagBits GetMaxUsableSampleCount();
+	void CreateColorResources();
 };
