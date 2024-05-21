@@ -12,3 +12,5 @@
 #else
 #define DEBUG
 #endif
+
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
